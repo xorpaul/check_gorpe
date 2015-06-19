@@ -13,3 +13,6 @@ GORPE version 1.0 Build time: 2015-06-19 12:33:01|gorpe_uptime=408.1s
 $ echo $?
 0
 ```
+
+Link to the GORPE daemon: https://github.com/xorpaul/gorpe
+
