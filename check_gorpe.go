@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"flag"
 	"io/ioutil"
 	"log"
@@ -14,9 +15,9 @@ import (
 var debug bool
 
 // Debugf is a helper function for debug logging if mainCfgSection["debug"] is set
-func Debugf(format string, args ...interface{}) {
+func Debugf(s string) {
 	if debug {
-		log.Print("DEBUG "+format, args)
+		log.Print("DEBUG " + s)
 	}
 }
 
@@ -24,11 +25,19 @@ func main() {
 	log.SetFlags(0)
 	log.SetOutput(os.Stdout)
 
-	var hostFlag = flag.String("H", "", "Hostname to query")
-	var portFlag = flag.Int("p", 5666, "Port to send the query to, defaults to 5666")
-	var cmdFlag = flag.String("c", "", "gorpe Command to execute on the remote host")
-	var debugFlag = flag.Bool("debug", false, "log debug output, defaults to false")
-	var argFlag = flag.String("a", "", "Optional gorpe command argument")
+	var (
+		hostFlag  = flag.String("H", "", "Hostname to query")
+		portFlag  = flag.Int("p", 5666, "Port to send the query to, defaults to 5666")
+		cmdFlag   = flag.String("c", "", "gorpe Command to execute on the remote host")
+		debugFlag = flag.Bool("debug", false, "log debug output, defaults to false")
+		argFlag   = flag.String("a", "", "Optional gorpe command argument")
+		// tls flags
+		insecureFlag = flag.Bool("insecure", false, "skip certificate verification")
+		certFile     = flag.String("cert", "", "A PEM eoncoded certificate file.")
+		keyFile      = flag.String("key", "", "A PEM encoded private key file.")
+		caFile       = flag.String("ca", "", "A PEM eoncoded CA's certificate file.")
+	)
+
 	//var argsFlag []string
 	//flag.Var(&argsFlag, "a", "Optional gorpe command arguments")
 
@@ -41,10 +50,89 @@ func main() {
 
 	debug = *debugFlag
 
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	// initialize http client with defaults
+	client := &http.Client{}
+
+	// TLS stuff
+	tlsConfig := &tls.Config{}
+	//Use only modern ciphers
+	tlsConfig.CipherSuites = []uint16{tls.TLS_RSA_WITH_AES_128_CBC_SHA,
+		tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256}
+	//Use only TLS v1.2
+	tlsConfig.MinVersion = tls.VersionTLS12
+
+	//Don't allow session resumption
+	tlsConfig.SessionTicketsDisabled = true
+
+	var certFilenames = map[string]string{
+		"cert": *certFile,
+		"key":  *keyFile,
+		"ca":   *caFile,
 	}
-	client := &http.Client{Transport: tr}
+
+	client_cert_enabled := false
+	for _, filename := range certFilenames {
+		if filename != "" {
+			if _, err := os.Stat(filename); os.IsNotExist(err) {
+				// generate certs
+				log.Println("Certificate file: " + filename + " not found! Exiting...\n")
+				os.Exit(1)
+			} else {
+				Debugf("Certificate file: " + filename + " found.\n")
+				client_cert_enabled = true
+			}
+		}
+	}
+
+	if client_cert_enabled {
+		mycert, err := tls.LoadX509KeyPair(*certFile, *keyFile)
+		if err != nil {
+			panic(err)
+		}
+
+		tlsConfig.Certificates = make([]tls.Certificate, 1)
+		tlsConfig.Certificates[0] = mycert
+
+		if *caFile != "" {
+			pem, err := ioutil.ReadFile(*caFile)
+			if err != nil {
+				panic(err)
+			}
+
+			certPool := x509.NewCertPool()
+			if !certPool.AppendCertsFromPEM(pem) {
+				panic("Failed appending certs")
+			} else {
+				Debugf("Successfully loaded CA file: " + *caFile)
+			}
+			tlsConfig.RootCAs = certPool
+			tlsConfig.ClientCAs = certPool
+
+		}
+		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
+		tlsConfig.BuildNameToCertificate()
+
+		tlsConfig.InsecureSkipVerify = true
+
+		transport := &http.Transport{TLSClientConfig: tlsConfig}
+		client = &http.Client{Transport: transport}
+
+	}
+
+	if *insecureFlag {
+		transport := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		client = &http.Client{Transport: transport}
+	}
+
+	//log.Print(config)
 
 	// http.Get() can handle gzipped data response automagically
 	url := "https://" + *hostFlag + ":" + strconv.Itoa(*portFlag)
@@ -75,18 +163,18 @@ func main() {
 	}
 
 	outArray := strings.Split(string(out), "\n")
-	Debugf("outArray:", outArray)
-	Debugf("len(outArray):", len(outArray))
+	Debugf("outArray:" + strings.Join(outArray, " "))
+	Debugf("len(outArray):" + string(len(outArray)))
 
 	returnCodeLine := outArray[len(outArray)-2]
-	Debugf("returnCodeLine:", returnCodeLine)
+	Debugf("returnCodeLine:" + returnCodeLine)
 	outArray = outArray[:len(outArray)-2]
 
 	returnCode := returnCodeLine[len(returnCodeLine)-1:]
-	Debugf("returnCode:", returnCode)
+	Debugf("returnCode:" + returnCode)
 
 	exitCode, _ := strconv.Atoi(returnCode)
-	Debugf("exitCode:", exitCode)
+	Debugf("exitCode:" + string(exitCode))
 
 	log.Print(strings.Join(outArray, "\n"))
 	//log.Print(strconv.Atoi(returnCode))
