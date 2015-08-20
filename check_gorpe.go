@@ -44,6 +44,12 @@ func main() {
 
 	flag.Parse()
 
+	if t := os.Getenv("VIMRUNTIME"); len(t) > 0 {
+		*hostFlag = "127.0.0.1"
+		*portFlag = 5667
+		//*envBranchFlag = "fullmanaged"
+	}
+
 	if *hostFlag == "" {
 		log.Println("Hostname parameter -H is mandatory!")
 		os.Exit(1)
@@ -133,6 +139,7 @@ func main() {
 	}
 
 	var resp *http.Response
+	var out []byte
 	if *argFlag != "" {
 		v := netUrl.Values{}
 
@@ -141,9 +148,27 @@ func main() {
 		argCounter++
 
 		Debugf("Trying to POST " + url)
-		resp, _ = client.PostForm(url, v)
+		resp, err := client.PostForm(url, v)
+		if err != nil {
+			log.Println(err)
+			os.Exit(3)
+		}
+		out, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.Println(err)
+			os.Exit(3)
+		}
 	} else {
-		resp, _ = client.Get(url)
+		resp, err := client.Get(url)
+		if err != nil {
+			log.Println(err)
+			os.Exit(3)
+		}
+		out, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.Println(err)
+			os.Exit(3)
+		}
 	}
 
 	defer resp.Body.Close()
