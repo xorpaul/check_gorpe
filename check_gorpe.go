@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	netUrl "net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -31,11 +32,11 @@ func main() {
 		cmdFlag   = flag.String("c", "", "gorpe Command to execute on the remote host")
 		debugFlag = flag.Bool("debug", false, "log debug output, defaults to false")
 		argFlag   = flag.String("a", "", "Optional gorpe command argument")
+		//argFlag = flag.Values([]string, []string{}, "Optional gorpe command argument")
 		// tls flags
-		insecureFlag = flag.Bool("insecure", false, "skip certificate verification")
-		certFile     = flag.String("cert", "", "A PEM eoncoded certificate file.")
-		keyFile      = flag.String("key", "", "A PEM encoded private key file.")
-		caFile       = flag.String("ca", "", "A PEM eoncoded CA's certificate file.")
+		certFile = flag.String("cert", "", "A PEM eoncoded certificate file.")
+		keyFile  = flag.String("key", "", "A PEM encoded private key file.")
+		caFile   = flag.String("ca", "", "A PEM eoncoded CA's certificate file.")
 	)
 
 	//var argsFlag []string
@@ -49,9 +50,6 @@ func main() {
 	}
 
 	debug = *debugFlag
-
-	// initialize http client with defaults
-	client := &http.Client{}
 
 	// TLS stuff
 	tlsConfig := &tls.Config{}
@@ -69,6 +67,11 @@ func main() {
 
 	//Don't allow session resumption
 	tlsConfig.SessionTicketsDisabled = true
+
+	tlsConfig.InsecureSkipVerify = true
+
+	// initialize http client with defaults
+	client := &http.Client{Transport: &http.Transport{TLSClientConfig: tlsConfig}}
 
 	var certFilenames = map[string]string{
 		"cert": *certFile,
@@ -118,39 +121,29 @@ func main() {
 		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
 		tlsConfig.BuildNameToCertificate()
 
-		tlsConfig.InsecureSkipVerify = true
-
 		transport := &http.Transport{TLSClientConfig: tlsConfig}
 		client = &http.Client{Transport: transport}
 
-	}
+	} //Close if client_cert_enabled
 
-	if *insecureFlag {
-		transport := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-		client = &http.Client{Transport: transport}
-	}
-
-	//log.Print(config)
-
-	// http.Get() can handle gzipped data response automagically
 	url := "https://" + *hostFlag + ":" + strconv.Itoa(*portFlag)
 
 	if *cmdFlag != "" {
 		url += "/" + *cmdFlag
 	}
 
+	var resp *http.Response
 	if *argFlag != "" {
-		url += "/" + *argFlag
-	}
+		v := netUrl.Values{}
 
-	Debugf("Trying to GET " + url)
-	resp, err := client.Get(url)
+		argCounter := 1
+		v.Set("arg"+string(argCounter), *argFlag)
+		argCounter++
 
-	if err != nil {
-		log.Println(err)
-		os.Exit(1)
+		Debugf("Trying to POST " + url)
+		resp, _ = client.PostForm(url, v)
+	} else {
+		resp, _ = client.Get(url)
 	}
 
 	defer resp.Body.Close()
