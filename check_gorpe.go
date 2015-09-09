@@ -46,10 +46,10 @@ func main() {
 
 	if t := os.Getenv("VIMRUNTIME"); len(t) > 0 {
 		*debugFlag = true
-		*hostFlag = "itinfra-mon-bs100.server.lan"
-		*portFlag = 5668
-		*cmdFlag = "check_http_wild"
-		*argFlag = "-H puppet-hosting-ca.server.lan -S -p 8140 -e 404 -t 1"
+		*hostFlag = "127.0.0.1"
+		*portFlag = 5667
+		*cmdFlag = "/"
+		//*argFlag = "foobar"
 	}
 
 	if *hostFlag == "" {
@@ -137,7 +137,7 @@ func main() {
 	url := "https://" + *hostFlag + ":" + strconv.Itoa(*portFlag)
 
 	if *cmdFlag != "" {
-		url += "/" + *cmdFlag
+		url += "/" + strings.Trim(*cmdFlag, "/")
 	}
 
 	var out []byte
