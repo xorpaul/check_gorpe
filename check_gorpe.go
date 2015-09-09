@@ -45,9 +45,11 @@ func main() {
 	flag.Parse()
 
 	if t := os.Getenv("VIMRUNTIME"); len(t) > 0 {
-		*hostFlag = "127.0.0.1"
-		*portFlag = 5667
-		//*envBranchFlag = "fullmanaged"
+		*debugFlag = true
+		*hostFlag = "itinfra-mon-bs100.server.lan"
+		*portFlag = 5668
+		*cmdFlag = "check_http_wild"
+		*argFlag = "-H puppet-hosting-ca.server.lan -S -p 8140 -e 404 -t 1"
 	}
 
 	if *hostFlag == "" {
@@ -138,9 +140,9 @@ func main() {
 		url += "/" + *cmdFlag
 	}
 
-	var resp *http.Response
 	var out []byte
 	if *argFlag != "" {
+		var resp *http.Response
 		v := netUrl.Values{}
 
 		argCounter := 1
@@ -158,7 +160,10 @@ func main() {
 			log.Println(err)
 			os.Exit(3)
 		}
+		defer resp.Body.Close()
 	} else {
+		var resp *http.Response
+		Debugf("Trying to GET" + url)
 		resp, err := client.Get(url)
 		if err != nil {
 			log.Println(err)
@@ -169,15 +174,7 @@ func main() {
 			log.Println(err)
 			os.Exit(3)
 		}
-	}
-
-	defer resp.Body.Close()
-
-	out, err := ioutil.ReadAll(resp.Body)
-
-	if err != nil {
-		log.Println(err)
-		os.Exit(3)
+		defer resp.Body.Close()
 	}
 
 	outArray := strings.Split(string(out), "\n")
