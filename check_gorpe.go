@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"strings"
 )
 
+var buildtime string
 var debug bool
 
 // Debugf is a helper function for debug logging if mainCfgSection["debug"] is set
@@ -27,11 +29,12 @@ func main() {
 	log.SetOutput(os.Stdout)
 
 	var (
-		hostFlag  = flag.String("H", "", "Hostname to query")
-		portFlag  = flag.Int("p", 5666, "Port to send the query to, defaults to 5666")
-		cmdFlag   = flag.String("c", "", "gorpe Command to execute on the remote host")
-		debugFlag = flag.Bool("debug", false, "log debug output, defaults to false")
-		argFlag   = flag.String("a", "", "Optional gorpe command argument")
+		versionFlag = flag.Bool("version", false, "show build time and version number")
+		hostFlag    = flag.String("H", "", "Hostname to query")
+		portFlag    = flag.Int("p", 5666, "Port to send the query to, defaults to 5666")
+		cmdFlag     = flag.String("c", "", "gorpe Command to execute on the remote host")
+		debugFlag   = flag.Bool("debug", false, "log debug output, defaults to false")
+		argFlag     = flag.String("a", "", "Optional gorpe command argument")
 		//argFlag = flag.Values([]string, []string{}, "Optional gorpe command argument")
 		// tls flags
 		certFile = flag.String("cert", "", "A PEM eoncoded certificate file.")
@@ -50,6 +53,11 @@ func main() {
 		*portFlag = 5667
 		*cmdFlag = "/"
 		//*argFlag = "foobar"
+	}
+
+	if *versionFlag {
+		fmt.Println("check_gorpe version 0.1 Build time:", buildtime, "UTC")
+		os.Exit(0)
 	}
 
 	if *hostFlag == "" {
@@ -80,6 +88,7 @@ func main() {
 
 	// initialize http client with defaults
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: tlsConfig}}
+	hostname, _ := os.Hostname()
 
 	var certFilenames = map[string]string{
 		"cert": *certFile,
@@ -92,7 +101,7 @@ func main() {
 		if filename != "" {
 			if _, err := os.Stat(filename); os.IsNotExist(err) {
 				// generate certs
-				log.Println("Certificate file: " + filename + " not found! Exiting...\n")
+				log.Println("Certificate file: " + filename + " not found on host " + hostname + "! Exiting...\n")
 				os.Exit(1)
 			} else {
 				Debugf("Certificate file: " + filename + " found.\n")
@@ -152,7 +161,7 @@ func main() {
 		Debugf("Trying to POST " + url)
 		resp, err := client.PostForm(url, v)
 		if err != nil {
-			log.Println(err)
+			log.Println("Error while requesting from host " + hostname + " Error: " + err.Error())
 			os.Exit(3)
 		}
 		out, err = ioutil.ReadAll(resp.Body)
@@ -166,12 +175,13 @@ func main() {
 		Debugf("Trying to GET" + url)
 		resp, err := client.Get(url)
 		if err != nil {
-			log.Println(err)
+			log.Println("Error while requesting from host " + hostname + " Error: " + err.Error())
 			os.Exit(3)
 		}
 		out, err = ioutil.ReadAll(resp.Body)
 		if err != nil {
 			log.Println(err)
+			log.Println("Error on host " + hostname + " while reading response body Error: " + err.Error())
 			os.Exit(3)
 		}
 		defer resp.Body.Close()
