@@ -155,7 +155,7 @@ func main() {
 		v := netUrl.Values{}
 
 		argCounter := 1
-		v.Set("arg"+string(argCounter), *argFlag)
+		v.Set("arg"+strconv.Itoa(argCounter), *argFlag)
 		argCounter++
 
 		Debugf("Trying to POST " + url)
@@ -189,7 +189,7 @@ func main() {
 
 	outArray := strings.Split(string(out), "\n")
 	Debugf("outArray:" + strings.Join(outArray, " "))
-	Debugf("len(outArray):" + string(len(outArray)))
+	Debugf("len(outArray):" + strconv.Itoa(len(outArray)))
 
 	returnCodeLine := outArray[len(outArray)-2]
 	Debugf("returnCodeLine:" + returnCodeLine)
@@ -199,7 +199,7 @@ func main() {
 	Debugf("returnCode:" + returnCode)
 
 	exitCode, _ := strconv.Atoi(returnCode)
-	Debugf("exitCode:" + string(exitCode))
+	Debugf("exitCode:" + strconv.Itoa(exitCode))
 
 	log.Print(strings.Join(outArray, "\n"))
 	//log.Print(strconv.Atoi(returnCode))
